@@ -7,11 +7,24 @@ from admin import *
 from logs import *
 from utils import *
 
+# ---------------- Render keep-alive tiny web server ----------------
+import os
+from flask import Flask
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot Running"
+
+port = int(os.environ.get("PORT", 5000))
+
+import threading
+threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
+# -------------------------------------------------------------------
+
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 bot = telebot.TeleBot(BOT_TOKEN)
-
 
 @bot.message_handler(commands=['start'])
 def start(message):
