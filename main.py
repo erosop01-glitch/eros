@@ -77,27 +77,21 @@ def search_handler(message):
 def bonus(message):
     handle_daily_bonus(bot, message)
 
-
 # -----------------------------
 # ADMIN COMMANDS
 # -----------------------------
 @bot.message_handler(commands=[
-    'admin', 'unadmin', 'admins',
-    'addcredits', 'remcredits',
-    'block', 'unblock',
+    'admin',
+    'addcredits',
+    'remcredits',
+    'userinfo',
     'broadcast',
-    'makecode',
-    'updatelog',
-    'stats',
-    'resetuser',
-    'refillall',
-    'reftop',
-    'logs'
+    'resetref',
+    'users'
 ])
 def admin_handler(message):
     handle_admin_commands(bot, message)
-
-
+    
 # -----------------------------
 # GLOBAL PROTECTION
 # -----------------------------
