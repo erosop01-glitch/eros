@@ -1,163 +1,96 @@
+from config import *
+from utils import *
 from database import db, save_db
-from logs import log_action
-from config import ADMIN_ID
-from utils import is_admin_id
+from telebot import types
+
+# ---------------------
+# ADMIN CHECK WRAPPER
+# ---------------------
+def admin_only(func):
+    def wrapper(bot, message):
+        uid = message.from_user.id
+        if str(uid) != str(ADMIN_ID):
+            return bot.reply_to(message, "❌ You are not authorized to use admin commands.")
+        return func(bot, message)
+    return wrapper
 
 
-def is_admin(uid):
-    uid = str(uid)
-    return uid == str(ADMIN_ID) or ("admins" in db and uid in db["admins"])
-
-
+# ---------------------
+# HANDLE ADMIN COMMANDS
+# ---------------------
+@admin_only
 def handle_admin_commands(bot, message):
     uid = message.from_user.id
     text = message.text.split()
+    cmd = text[0].lower()
 
-    if not is_admin(uid):
-        return bot.send_message(uid, "❌ Admin only.")
+    # Extract target user if needed
+    target = text[1] if len(text) > 1 else None
 
-    cmd = text[0]
+    # Ensure DB safety
+    if target not in db:
+        db[target] = {"credits": 0, "ref_by": None}
+        save_db(db)
 
-    # -------------------
-    # ADD ADMIN
-    # -------------------
-    if cmd == "/admin":
-        if len(text) < 2:
-            return bot.send_message(uid, "Use: /admin USERID")
+    # FIX: Ensure proper dictionary
+    user = db.get(target, {})
+    if not isinstance(user, dict):
+        user = {"credits": 0, "ref_by": None}
+        db[target] = user
+        save_db(db)
 
-        target = text[1]
-        if "admins" not in db:
-            db["admins"] = []
+    # -------------------------
+    # ADMIN COMMANDS START HERE
+    # -------------------------
 
-        if target not in db["admins"]:
-            db["admins"].append(target)
-            save_db()
-            log_action(uid, f"Added admin {target}")
-            return bot.send_message(uid, f"✅ Admin added: {target}")
-
-    # -------------------
-    # REMOVE ADMIN
-    # -------------------
-    if cmd == "/unadmin":
-        if len(text) < 2:
-            return bot.send_message(uid, "Use: /unadmin USERID")
-
-        target = text[1]
-        if target in db["admins"]:
-            db["admins"].remove(target)
-            save_db()
-            log_action(uid, f"Removed admin {target}")
-            return bot.send_message(uid, f"❎ Admin removed: {target}")
-
-    # -------------------
-    # ADMIN LIST
-    # -------------------
-    if cmd == "/admins":
-        if "admins" not in db or not db["admins"]:
-            return bot.send_message(uid, "No admins yet.")
-
-        text = "👑 *Admins:*\n" + "\n".join(db["admins"])
-        return bot.send_message(uid, text, parse_mode="Markdown")
-
-    # -------------------
-    # ADD CREDITS
-    # -------------------
-    if cmd == "/addcredits":
-        if len(text) < 3:
-            return bot.send_message(uid, "Use: /addcredits USERID AMOUNT")
-
-        target = text[1]
+    # Add Credits
+    if cmd == "addcredits":
         amount = int(text[2])
+        user["credits"] += amount
+        save_db(db)
+        return bot.reply_to(message, f"✅ Added {amount} credits to {target}")
 
-        if target not in db:
-            return bot.send_message(uid, "User not found.")
-
-        db[target]["credits"] += amount
-        save_db()
-
-        log_action(uid, f"Added {amount} credits to {target}")
-        return bot.send_message(uid, f"✅ Added {amount} credits to {target}")
-
-    # -------------------
-    # REMOVE CREDITS
-    # -------------------
-    if cmd == "/remcredits":
-        if len(text) < 3:
-            return bot.send_message(uid, "Use: /remcredits USERID AMOUNT")
-
-        target = text[1]
+    # Remove Credits
+    elif cmd == "remcredits":
         amount = int(text[2])
+        user["credits"] = max(0, user["credits"] - amount)
+        save_db(db)
+        return bot.reply_to(message, f"✅ Removed {amount} credits from {target}")
 
-        if target not in db:
-            return bot.send_message(uid, "User not found.")
+    # Check User Info
+    elif cmd == "userinfo":
+        msg = f"""
+👤 **User Info**
+ID: `{target}`
+Credits: `{user.get('credits', 0)}`
+Referred by: `{user.get('ref_by', None)}`
+"""
+        return bot.reply_to(message, msg, parse_mode="Markdown")
 
-        db[target]["credits"] = max(0, db[target]["credits"] - amount)
-        save_db()
-
-        log_action(uid, f"Removed {amount} credits from {target}")
-        return bot.send_message(uid, f"❎ Removed {amount} credits from {target}")
-
-    # -------------------
-    # BROADCAST
-    # -------------------
-    if cmd == "/broadcast":
-        msg = message.text.replace("/broadcast ", "")
-        for u in db:
+    # Broadcast Message
+    elif cmd == "broadcast":
+        send_msg = message.text.replace("broadcast ", "")
+        for u in db.keys():
             try:
-                bot.send_message(u, msg)
+                bot.send_message(u, send_msg)
             except:
                 pass
-        log_action(uid, "Broadcast sent")
-        return bot.send_message(uid, "📢 Broadcast sent.")
+        return bot.reply_to(message, "📢 Broadcast sent to all users!")
 
-    # -------------------
-    # REFILL ALL USERS
-    # -------------------
-    if cmd == "/refillall":
-        if len(text) < 2:
-            return bot.send_message(uid, "Use: /refillall AMOUNT")
+    # Update User Referral Reset
+    elif cmd == "resetref":
+        user["ref_by"] = None
+        save_db(db)
+        return bot.reply_to(message, f"🔄 Referral reset for {target}")
 
-        amount = int(text[1])
-        count = 0
+    # List All Users
+    elif cmd == "users":
+        return bot.reply_to(message, f"👥 Total Users: {len(db)}")
 
-        for u in db:
-            if u.isdigit():
-                db[u]["credits"] += amount
-                count += 1
-
-        save_db()
-        log_action(uid, f"Refilled {amount} to all users")
-
-        return bot.send_message(uid, f"🔥 Refilled {amount} credits to {count} users.")
-
-    # -------------------
-    # REFERRAL RANKING
-    # -------------------
-    if cmd == "/reftop":
-        counts = {}
-
-        for u in db:
-            if db[u].get("ref_by"):
-                r = db[u]["ref_by"]
-                counts[r] = counts.get(r, 0) + 1
-
-        if not counts:
-            return bot.send_message(uid, "No referrals yet.")
-
-        sorted_list = sorted(counts.items(), key=lambda x: x[1], reverse=True)
-
-        text = "🏆 *Top Referrers:*\n\n"
-        for i, (user, cnt) in enumerate(sorted_list[:10], start=1):
-            text += f"{i}) `{user}` — {cnt}\n"
-
-        return bot.send_message(uid, text, parse_mode="Markdown")
-
-    # -------------------
-    # VIEW LOGS
-    # -------------------
-    if cmd == "/logs":
-        from logs import get_last_logs
-        logs = get_last_logs(20)
-        return bot.send_message(uid, logs, parse_mode="Markdown")
-
-    bot.send_message(uid, "Unknown admin command.")
+    # Admin Help
+    elif cmd == "adminhelp":
+        return bot.reply_to(
+            message,
+            """
+🔐 **ADMIN PANEL**  
+Commands:
