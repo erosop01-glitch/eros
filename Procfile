@@ -1,1 +1,1 @@
-worker: python bot/main.py
+worker: python eros/main.py
