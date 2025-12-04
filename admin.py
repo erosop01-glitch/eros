@@ -24,7 +24,7 @@ def handle_admin_commands(bot, message):
     text = message.text.split()
     cmd = text[0].lower()
 
-    # Extract target user if needed
+    # Extract user id argument
     target = text[1] if len(text) > 1 else None
 
     # Ensure DB safety
@@ -32,7 +32,7 @@ def handle_admin_commands(bot, message):
         db[target] = {"credits": 0, "ref_by": None}
         save_db(db)
 
-    # FIX: Ensure proper dictionary
+    # Make sure target user entry is dictionary
     user = db.get(target, {})
     if not isinstance(user, dict):
         user = {"credits": 0, "ref_by": None}
@@ -40,7 +40,7 @@ def handle_admin_commands(bot, message):
         save_db(db)
 
     # -------------------------
-    # ADMIN COMMANDS START HERE
+    # ADMIN COMMANDS
     # -------------------------
 
     # Add Credits
@@ -59,15 +59,15 @@ def handle_admin_commands(bot, message):
 
     # Check User Info
     elif cmd == "userinfo":
-        msg = f"""
-👤 **User Info**
-ID: `{target}`
-Credits: `{user.get('credits', 0)}`
-Referred by: `{user.get('ref_by', None)}`
-"""
+        msg = (
+            f"👤 *User Info*\n"
+            f"ID: `{target}`\n"
+            f"Credits: `{user.get('credits', 0)}`\n"
+            f"Referred by: `{user.get('ref_by', None)}`"
+        )
         return bot.reply_to(message, msg, parse_mode="Markdown")
 
-    # Broadcast Message
+    # Broadcast
     elif cmd == "broadcast":
         send_msg = message.text.replace("broadcast ", "")
         for u in db.keys():
@@ -77,20 +77,28 @@ Referred by: `{user.get('ref_by', None)}`
                 pass
         return bot.reply_to(message, "📢 Broadcast sent to all users!")
 
-    # Update User Referral Reset
+    # Reset Referral
     elif cmd == "resetref":
         user["ref_by"] = None
         save_db(db)
         return bot.reply_to(message, f"🔄 Referral reset for {target}")
 
-    # List All Users
+    # Total users
     elif cmd == "users":
         return bot.reply_to(message, f"👥 Total Users: {len(db)}")
 
-    # Admin Help
+    # Admin help
     elif cmd == "adminhelp":
-        return bot.reply_to(
-            message,
-            """
-🔐 **ADMIN PANEL**  
-Commands:
+        help_text = (
+            "🔐 *ADMIN PANEL COMMANDS*\n\n"
+            "`addcredits <uid> <amount>`\n"
+            "`remcredits <uid> <amount>`\n"
+            "`userinfo <uid>`\n"
+            "`broadcast <text>`\n"
+            "`resetref <uid>`\n"
+            "`users`\n"
+        )
+        return bot.reply_to(message, help_text, parse_mode="Markdown")
+
+    else:
+        return bot.reply_to(message, "❌ Unknown admin command.")
